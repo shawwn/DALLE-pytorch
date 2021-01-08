@@ -10,14 +10,15 @@ imgSize = 256
 vae = DiscreteVAE(
     image_size = imgSize,
     num_layers = 3,
-    num_tokens = 1024,
-    codebook_dim = 512,
-    hidden_dim = 64
+    channels = 3,
+    num_tokens = 2048,
+    codebook_dim = 1024,
+    hidden_dim = 128
 )
 
 vae.cuda()
 
-batchSize = 32
+batchSize = 12
 n_epochs = 500
 log_interval = 20
 #images = torch.randn(4, 3, 256, 256)
@@ -42,6 +43,7 @@ for epoch in range(0, n_epochs):
     train_loss = 0
     for batch_idx, (images, _) in enumerate(train_loader):
         images = images.cuda()
+        optimizer.zero_grad()
         loss = vae(images, return_recon_loss = True)
         loss.backward()
 
@@ -54,10 +56,10 @@ for epoch in range(0, n_epochs):
                 100. * batch_idx / len(train_loader),
                 loss.item() / len(images)))
 
-    sample = vae(images, return_recon_loss = False)
-    sample = sample / 2 + 0.5
+    sample = vae(images, return_recon_loss = False)    
+    #sample = sample / 2 + 0.5
     save_image(sample.view(-1, 3, imgSize, imgSize),
-               'results/sample_' + str(epoch) + '.png')
+               'results/sample_' + str(epoch) + '.png', normalize=True)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
           epoch, train_loss / len(train_loader.dataset)))
     torch.save(vae.state_dict(), "./models/dvae-"+str(epoch)+".pth")
