@@ -20,10 +20,11 @@ from dalle_pytorch import DiscreteVAE
 
 vae = DiscreteVAE(
     image_size = 256,
-    num_layers = 3,
-    num_tokens = 1024,
-    codebook_dim = 512,
-    hidden_dim = 64
+    num_layers = 3,         # number of downsamples - ex. 256 / (2 ** 3) = (32 x 32 feature map)
+    num_tokens = 1024,      # number of visual tokens. iGPT had 512, so probably should have more
+    codebook_dim = 512,     # codebook dimension
+    hidden_dim = 64,        # hidden dimension
+    temperature = 0.9       # gumbel softmax temperature, the lower this is, the more hard the discretization
 )
 
 images = torch.randn(4, 3, 256, 256)
@@ -44,7 +45,9 @@ vae = DiscreteVAE(
     image_size = 256,
     num_layers = 3,
     num_tokens = 1024,
-    codebook_dim = 512
+    codebook_dim = 512,
+    hidden_dim = 64,
+    temperature = 0.9
 )
 
 dalle = DALLE(
@@ -130,3 +133,5 @@ Or you can just use the official <a href="https://github.com/openai/CLIP">CLIP m
     year   = {2021}
 }
 ```
+
+*Those who do not want to imitate anything, produce nothing.* - Dali
