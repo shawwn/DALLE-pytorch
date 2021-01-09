@@ -7,6 +7,12 @@ import torch.nn.functional as F
 from dalle_pytorch import DiscreteVAE
 
 imgSize = 256
+batchSize = 48
+n_epochs = 500
+log_interval = 10
+lr = 1e-4
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 vae = DiscreteVAE(
     image_size = imgSize,
@@ -17,12 +23,7 @@ vae = DiscreteVAE(
     hidden_dim = 128
 )
 
-vae.cuda()
-
-batchSize = 48
-n_epochs = 500
-log_interval = 10
-#images = torch.randn(4, 3, 256, 256)
+vae.to(device)
 
 t = transforms.Compose([
   transforms.Resize(imgSize),
@@ -35,17 +36,13 @@ train_set = datasets.ImageFolder('./imagedata', transform=t, target_transform=No
 
 train_loader = DataLoader(dataset=train_set, num_workers=1, batch_size=batchSize, shuffle=True)
 
-optimizer = optim.Adam(vae.parameters(), lr=1e-5)
-#optimizer.cuda()
+optimizer = optim.Adam(vae.parameters(), lr=lr)
 
-# train with a lot of data to learn a good codebook
 for epoch in range(0, n_epochs):
 
     train_loss = 0
     for batch_idx, (images, _) in enumerate(train_loader):
-        images = images.cuda()
-        #loss = vae(images, return_recon_loss = True)
-        #loss.backward()
+        images = images.to(device) 
         recons = vae(images)
         loss = F.smooth_l1_loss(images, recons) 
         
