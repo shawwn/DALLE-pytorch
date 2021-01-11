@@ -187,7 +187,7 @@ for epoch in range(start_epoch, start_epoch+n_epochs):
     if batch_idx % log_interval == 0:
         print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
             epoch, batch_idx * len(i), len(data),
-            100. * batch_idx / len(data),
+            100. * batch_idx / int(round(len(data)/batchSize)),
             loss.item() / len(i)))
     
     batch_idx += 1
