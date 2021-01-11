@@ -22,8 +22,6 @@ lr = 2e-5
 
 #dalle
 
-# to continue training from a saved checkpoint, give checkpoint path as loadfn and start_epoch 
-
 dalle_epoch = 220
 #loadfn = ""
 #start_epoch = 0
