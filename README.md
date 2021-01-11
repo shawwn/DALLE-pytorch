@@ -2,6 +2,8 @@
 
 Implementation / replication of <a href="https://openai.com/blog/dall-e/">DALL-E</a>, OpenAI's Text to Image Transformer, in Pytorch. It will also contain <a href="https://openai.com/blog/clip/">CLIP</a> for ranking the generations.
 
+<a href="https://github.com/sdtblck">Sid</a>, <a href="http://github.com/kingoflolz">Ben</a>, and <a href="https://github.com/AranKomat">Aran</a> over at <a href="https://www.eleuther.ai/">Eleuther AI</a> are working on <a href="https://github.com/EleutherAI/DALLE-mtf">DALL-E for Mesh Tensorflow</a>! Please lend them a hand if you would like to see DALL-E trained on TPUs.
+
 <a href="https://www.youtube.com/watch?v=j4xgkjWlfL4">Yannic Kilcher's video</a>
 
 ## Install
@@ -56,7 +58,10 @@ dalle = DALLE(
     num_text_tokens = 10000,    # vocab size for text
     text_seq_len = 256,         # text sequence length
     depth = 6,                  # should be 64
-    heads = 8
+    heads = 8,                  # attention heads
+    dim_head = 64,              # attention head dimension
+    attn_dropout = 0.1,         # attention dropout
+    ff_dropout = 0.1            # feedforward dropout
 )
 
 text = torch.randint(0, 10000, (4, 256))
@@ -116,6 +121,24 @@ images.shape # (2, 3, 256, 256)
 
 Or you can just use the official <a href="https://github.com/openai/CLIP">CLIP model</a> to rank the images from DALL-E
 
+## Scaling depth
+
+In the blog post, they used 64 layers to achieve their results. I added reversible networks, from the <a href="https://github.com/lucidrains/reformer-pytorch">Reformer</a> paper, in order for users to attempt to scale depth at the cost of compute. Reversible networks allow you to scale to any depth at no memory cost, but a little over 2x compute cost (each layer is rerun on the backward pass).
+
+Simply set the `reversible` keyword to `True` for the `DALLE` class
+
+```python
+dalle = DALLE(
+    dim = 512,
+    vae = vae,
+    num_text_tokens = 10000,
+    text_seq_len = 256,
+    depth = 64,
+    heads = 8,
+    reversible = True  # <-- reversible networks https://arxiv.org/abs/2001.04451
+)
+```
+
 ## Citations
 
 ```bibtex
@@ -131,6 +154,17 @@ Or you can just use the official <a href="https://github.com/openai/CLIP">CLIP m
     title  = {CLIP: Connecting Text and Images},
     author = {Alec Radford, Ilya Sutskever, Jong Wook Kim, Gretchen Krueger, Sandhini Agarwal},
     year   = {2021}
+}
+```
+
+```bibtex
+@misc{kitaev2020reformer,
+    title   = {Reformer: The Efficient Transformer},
+    author  = {Nikita Kitaev and Łukasz Kaiser and Anselm Levskaya},
+    year    = {2020},
+    eprint  = {2001.04451},
+    archivePrefix = {arXiv},
+    primaryClass = {cs.LG}
 }
 ```
 

@@ -4,7 +4,8 @@ from torch import nn, einsum
 import torch.nn.functional as F
 
 from einops import rearrange
-from x_transformers import Encoder, Decoder
+from axial_positional_embedding import AxialPositionalEmbedding
+from dalle_pytorch.transformer import Transformer
 
 # helpers
 
@@ -13,6 +14,11 @@ def exists(val):
 
 def default(val, d):
     return val if exists(val) else d
+
+def always(val):
+    def inner(*args, **kwargs):
+        return val
+    return inner
 
 def is_empty(t):
     return t.nelement() == 0
@@ -42,14 +48,29 @@ def top_k(logits, thres = 0.5):
 
 # discrete vae class
 
+class ResBlock(nn.Module):
+    def __init__(self, chan):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(chan, chan, 3, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(chan, chan, 3, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(chan, chan, 1)
+        )
+
+    def forward(self, x):
+        return self.net(x) + x
+
 class DiscreteVAE(nn.Module):
     def __init__(
         self,
         image_size = 256,
         num_tokens = 512,
         codebook_dim = 512,
-        hidden_dim = 64,
         num_layers = 3,
+        num_resnet_blocks = 0,
+        hidden_dim = 64,
         channels = 3,
         temperature = 0.9
     ):
@@ -65,28 +86,30 @@ class DiscreteVAE(nn.Module):
         
         hdim = hidden_dim
 
-        encoder_layers = []
-        decoder_layers = []
-        for i in range(num_layers):
-            is_first = i == 0
+        enc_chans = [hidden_dim] * num_layers
+        dec_chans = reversed(enc_chans)
 
-            enc_in = channels if is_first else hdim
-            encoder_layers += [
-                nn.Conv2d(enc_in, hdim, 4, stride = 2, padding = 1),
-                nn.ReLU(),
-            ]
-            
-            dec_in = codebook_dim if is_first else hdim
-            decoder_layers += [
-                nn.ConvTranspose2d(dec_in, hdim, 4, stride = 2, padding = 1),
-                nn.ReLU(),
-            ]
-            
-        encoder_layers.append(nn.Conv2d(hdim, num_tokens, 1))
-        decoder_layers.append(nn.Conv2d(hdim, channels, 1))
+        enc_chans = [channels, *enc_chans]
+        dec_chans = [codebook_dim, *dec_chans]
 
-        self.encoder = nn.Sequential(*encoder_layers)
-        self.decoder = nn.Sequential(*decoder_layers)
+        enc_chans_io, dec_chans_io = map(lambda t: list(zip(t[:-1], t[1:])), (enc_chans, dec_chans))
+
+        enc_layers = []
+        dec_layers = []
+
+        for (enc_in, enc_out), (dec_in, dec_out) in zip(enc_chans_io, dec_chans_io):
+            enc_layers.append(nn.Sequential(nn.Conv2d(enc_in, enc_out, 4, stride = 2, padding = 1), nn.ReLU()))
+            dec_layers.append(nn.Sequential(nn.ConvTranspose2d(dec_in, dec_out, 4, stride = 2, padding = 1), nn.ReLU()))
+
+        for _ in range(num_resnet_blocks):
+            enc_layers.append(ResBlock(enc_chans[-1]))
+            dec_layers.append(ResBlock(dec_chans[-1]))
+
+        enc_layers.append(nn.Conv2d(enc_chans[-1], num_tokens, 1))
+        dec_layers.append(nn.Conv2d(dec_chans[-1], channels, 1))
+
+        self.encoder = nn.Sequential(*enc_layers)
+        self.decoder = nn.Sequential(*dec_layers)
 
     @torch.no_grad()
     def get_codebook_indices(self, images):
@@ -150,7 +173,7 @@ class CLIP(nn.Module):
         super().__init__()
         self.text_emb = nn.Embedding(num_text_tokens, dim_text)
         self.text_pos_emb = nn.Embedding(text_seq_len, dim_text)
-        self.text_transformer = Encoder(dim = dim_text, depth = text_enc_depth, heads = text_heads)
+        self.text_transformer = Transformer(causal = False, dim = dim_text, depth = text_enc_depth, heads = text_heads)
         self.to_text_latent = nn.Linear(dim_text, dim_latent, bias = False)
 
         assert visual_image_size % visual_patch_size == 0, 'Image dimensions must be divisible by the patch size.'
@@ -160,7 +183,7 @@ class CLIP(nn.Module):
         self.visual_patch_size = visual_patch_size
         self.to_visual_embedding = nn.Linear(patch_dim, dim_image)
         self.visual_pos_emb = nn.Embedding(num_patches, dim_image)
-        self.visual_transformer = Encoder(dim = dim_image, depth = visual_enc_depth, heads = visual_heads)
+        self.visual_transformer = Transformer(causal = False, dim = dim_image, depth = visual_enc_depth, heads = visual_heads)
         self.to_visual_latent = nn.Linear(dim_image, dim_latent, bias = False)
 
         self.temperature = nn.Parameter(torch.tensor(1.))
@@ -217,12 +240,17 @@ class DALLE(nn.Module):
         vae,
         num_text_tokens = 10000,
         text_seq_len = 256,
-        depth = 6,
-        heads = 8
+        depth,
+        heads = 8,
+        dim_head = 64,
+        reversible = False,
+        attn_dropout = 0.,
+        ff_dropout = 0
     ):
         super().__init__()
         assert isinstance(vae, DiscreteVAE), 'vae must be an instance of DiscreteVAE'
 
+        image_size = vae.image_size
         num_image_tokens = vae.num_tokens
         image_seq_len = (vae.image_size // (2 ** vae.num_layers)) ** 2
 
@@ -230,7 +258,7 @@ class DALLE(nn.Module):
         self.image_emb = nn.Embedding(num_image_tokens, dim)
 
         self.text_pos_emb = nn.Embedding(text_seq_len, dim)
-        self.image_pos_emb = nn.Embedding(image_seq_len, dim)
+        self.image_pos_emb = AxialPositionalEmbedding(dim, axial_shape = (image_size, image_size))
 
         self.num_text_tokens = num_text_tokens # for offsetting logits index and calculating cross entropy loss
         self.num_image_tokens = num_image_tokens
@@ -247,7 +275,16 @@ class DALLE(nn.Module):
             self.vae = vae
             self.image_emb = vae.codebook
 
-        self.transformer = Decoder(dim = dim, depth = depth, heads = heads)
+        self.transformer = Transformer(
+            dim = dim,
+            causal = True,
+            depth = depth,
+            heads = heads,
+            dim_head = dim_head,
+            reversible = reversible,
+            attn_dropout = attn_dropout,
+            ff_dropout = ff_dropout
+        )
 
         self.to_logits = nn.Sequential(
             nn.LayerNorm(dim),
@@ -333,7 +370,7 @@ class DALLE(nn.Module):
 
             image_len = image.shape[1]
             image_emb = self.image_emb(image)
-            image_emb += self.image_pos_emb(torch.arange(image_len, device = device))
+            image_emb += self.image_pos_emb(image_emb)
 
             tokens = torch.cat((tokens, image_emb), dim = 1)
 
@@ -357,5 +394,5 @@ class DALLE(nn.Module):
         offsetted_image = image + self.num_text_tokens
         labels = torch.cat((text, offsetted_image), dim = 1)
         labels = F.pad(labels, (0, 1), value = eos_token_id) # last token predicts EOS
-        loss = F.cross_entropy(logits.transpose(1, 2), labels[:, 1:])
+        loss = F.cross_entropy(rearrange(logits, 'b n c -> b c n'), labels[:, 1:])
         return loss
