@@ -13,12 +13,14 @@ n_epochs = 500
 log_interval = 10
 lr = 1e-4
 temperature_scheduling = True
+
 name = "v2vae256"
+
+# for continuing training 
+# set loadfn: path to pretrained model
+# start_epoch: start epoch numbering from this
 loadfn = ""
-load_epoch = 0
-
-
-
+start_epoch = 0
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -40,7 +42,6 @@ vae.to(device)
 
 t = transforms.Compose([
   transforms.Resize(imgSize),
-  transforms.RandomHorizontalFlip(),
   transforms.ToTensor(),
   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) #(0.267, 0.233, 0.234))
   ])
@@ -56,7 +57,7 @@ if temperature_scheduling:
     dk = 0.7 ** (1/len(train_loader)) 
     print('Scale Factor:', dk)
 
-for epoch in range(0, n_epochs):
+for epoch in range(start_epoch, start_epoch + n_epochs):
 
     train_loss = 0
     for batch_idx, (images, _) in enumerate(train_loader):
