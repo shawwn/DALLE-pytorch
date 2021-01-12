@@ -1,3 +1,4 @@
+import argparse
 import torch
 from dalle_pytorch import DiscreteVAE, DALLE
 from torchvision.io import read_image
@@ -5,18 +6,33 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 from torchvision.utils import save_image
 
+parser = argparse.ArgumentParser(description='train VAE for DALLE-pytorch')
+parser.add_argument('--batchSize', type=int, default=24, help='batch size for training (default: 24)')
+parser.add_argument('--dataPath', type=str, default="./imagedata", help='path to imageFolder (default: ./imagedata')
+parser.add_argument('--imageSize', type=int, default=256, help='image size for training (default: 256)')
+parser.add_argument('--n_epochs', type=int, default=500, help='number of epochs (default: 500)')
+parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')
+#parser.add_argument('--tempsched', action='store_true', default=False, help='use temperature scheduling')
+#parser.add_argument('--temperature', type=float, default=0.9, help='vae temperature (default: 0.9)')
+parser.add_argument('--vaename', type=str, default="vae", help='experiment name')
+parser.add_argument('--vae_epoch', type=int, default=0, help='start epoch numbering for continuing training (default: 0)')
+parser.add_argument('--name', type=str, default="test", help='experiment name')
+parser.add_argument('--load_dalle', type=str, default="", help='name for pretrained VAE when continuing training')
+parser.add_argument('--start_epoch', type=int, default=0, help='start epoch numbering for continuing training (default: 0)')
+opt = parser.parse_args()
+
 # vae
 
-load_epoch = 390
-vaename = "vae-cdim256"
+load_epoch = opt.vae_epoch #499
+vaename = opt.vaename #"v2vae256"
 
 # general
 
-imgSize = 256
-batchSize = 12
-n_epochs = 100
+imgSize = opt.imageSize #256
+batchSize = opt.batchSize #24
+n_epochs = opt.n_epochs #500
 log_interval = 10
-lr = 2e-5
+lr = opt.lr #1e-4
 
 #dalle
 
@@ -24,23 +40,21 @@ lr = 2e-5
 
 #loadfn = "./models/dalle_vae-cdim256-140.pth"   
 #start_epoch = 140
-loadfn = ""
-start_epoch = 0
-name = "vae-cdim256"
+loadfn = opt.load_dalle
+start_epoch = opt.start_epoch
+name = opt.name #v2vae256
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 tf = transforms.Compose([
-  #transforms.Resize(imgSize),
-  #transforms.RandomHorizontalFlip(),
-  #transforms.ToTensor(),
-  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) #(0.267, 0.233, 0.234))
+  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) 
   ])
 
 vae = DiscreteVAE(
-    image_size = 256,
+    image_size = opt.imageSize,
     num_layers = 3,
+    channels = 3,
     num_tokens = 2048,
     codebook_dim = 256,
     hidden_dim = 128,
@@ -48,7 +62,7 @@ vae = DiscreteVAE(
 )
 
 # load pretrained vae
-
+print("loading VAE from ./models/"+vaename+"-"+str(load_epoch)+".pth")
 vae_dict = torch.load("./models/"+vaename+"-"+str(load_epoch)+".pth")
 vae.load_state_dict(vae_dict)
 vae.to(device)
@@ -168,7 +182,7 @@ for epoch in range(start_epoch, start_epoch+n_epochs):
     for imgfn in i:       # iterate through image paths in minibatch
 
         # note: images are expected to be in ./imagefolder/0/
-        img_t = read_image("./imagedata/0/"+imgfn).float()/255.   # read image and scale into float 0..1
+        img_t = read_image(opt.dataPath+"/0/"+imgfn).float()/255.   # read image and scale into float 0..1
         img_t = tf(img_t)  # normalize 
         images[ix,:,:,:] = img_t 
         ix += 1
@@ -195,10 +209,10 @@ for epoch in range(start_epoch, start_epoch+n_epochs):
   print('====> Epoch: {} Average loss: {:.4f}'.format(
           epoch, train_loss / len(data)))
 
-  torch.save(dalle.state_dict(), "./models/dalle_"+name+"-"+str(epoch)+".pth")
+  torch.save(dalle.state_dict(), "./models/"+name+"_dalle_"+str(epoch)+".pth")
   
   # generate a test sample from the captions in the last minibatch
   oimgs = dalle.generate_images(text, mask = mask)
   save_image(oimgs,
-               'results/dalle'+name+'_epoch_' + str(epoch) + '.png', normalize=True)
+               'results/'+name+'_dalle_epoch_' + str(epoch) + '.png', normalize=True)
 
