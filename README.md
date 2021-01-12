@@ -1,10 +1,16 @@
-## DALL-E in Pytorch (wip)
+## DALL-E in Pytorch
 
 Implementation / replication of <a href="https://openai.com/blog/dall-e/">DALL-E</a>, OpenAI's Text to Image Transformer, in Pytorch. It will also contain <a href="https://openai.com/blog/clip/">CLIP</a> for ranking the generations.
 
 <a href="https://github.com/sdtblck">Sid</a>, <a href="http://github.com/kingoflolz">Ben</a>, and <a href="https://github.com/AranKomat">Aran</a> over at <a href="https://www.eleuther.ai/">Eleuther AI</a> are working on <a href="https://github.com/EleutherAI/DALLE-mtf">DALL-E for Mesh Tensorflow</a>! Please lend them a hand if you would like to see DALL-E trained on TPUs.
 
 <a href="https://www.youtube.com/watch?v=j4xgkjWlfL4">Yannic Kilcher's video</a>
+
+## Status
+
+<a href="https://github.com/htoyryla">Hannu</a> has managed to train a small 6 layer DALL-E on a dataset of just 2000 landscape images! (2048 visual tokens)
+
+<img src="./images/landscape.png"></img>
 
 ## Install
 
@@ -136,6 +142,36 @@ dalle = DALLE(
     depth = 64,
     heads = 8,
     reversible = True  # <-- reversible networks https://arxiv.org/abs/2001.04451
+)
+```
+
+## Sparse Attention
+
+You can also train with Microsoft Deepspeed's <a href="https://www.deepspeed.ai/news/2020/09/08/sparse-attention.html">Sparse Attention</a>, with any combination of dense and sparse attention that you'd like. However, you will have to endure the installation process.
+
+First, you need to install Deepspeed with Sparse Attention
+
+```bash
+$ sh install_deepspeed.sh
+```
+
+Next, you need to install the pip package `triton`
+
+```bash
+$ pip install triton
+```
+
+If both of the above succeeded, now you can train with Sparse Attention!
+
+```python
+dalle = DALLE(
+    dim = 512,
+    vae = vae,
+    num_text_tokens = 10000,
+    text_seq_len = 256,
+    depth = 64,
+    heads = 8,
+    sparse_attn = (True, False) * 32  # interleave sparse and dense attention for 64 layers
 )
 ```
 
