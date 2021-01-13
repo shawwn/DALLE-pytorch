@@ -19,6 +19,7 @@ parser.add_argument('--temperature', type=float, default=0.9, help='vae temperat
 parser.add_argument('--name', type=str, default="vae", help='experiment name')
 parser.add_argument('--loadVAE', type=str, default="", help='name for pretrained VAE when continuing training')
 parser.add_argument('--start_epoch', type=int, default=0, help='start epoch numbering for continuing training (default: 0)')
+parser.add_argument('--clip', type=float, default=0, help='clip weights, 0 = no clipping (default: 0)')
 opt = parser.parse_args()
 
 imgSize = opt.imageSize #256
@@ -43,7 +44,7 @@ vae = DiscreteVAE(
     num_layers = 3,
     channels = 3,
     num_tokens = 2048,
-    codebook_dim = 1024,
+    codebook_dim = 256,
     hidden_dim = 128,
     temperature = opt.temperature
 )
@@ -67,6 +68,11 @@ train_loader = DataLoader(dataset=train_set, num_workers=1, batch_size=batchSize
 
 optimizer = optim.Adam(vae.parameters(), lr=lr)
 
+def clampWeights(m):
+    if type(m) != nn.BatchNorm2d and type(m) != nn.Sequential:
+      for p in m.parameters():
+        p.data.clamp_(-opt.clip, opt.clip)
+
 if temperature_scheduling:
     vae.temperature = opt.temperature
     dk = 0.7 ** (1/len(train_loader)) 
@@ -86,8 +92,11 @@ for epoch in range(start_epoch, start_epoch + n_epochs):
         train_loss += loss.item()
         optimizer.step()
 
+        if opt.clip > 0:
+            vae.apply(clampWeights)
+
         if batch_idx % log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.8f}'.format(
                 epoch, batch_idx * len(images), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader),
                 loss.item() / len(images)))
@@ -104,7 +113,7 @@ for epoch in range(start_epoch, start_epoch + n_epochs):
     save_image(grid,
                'results/'+name+'_epoch_' + str(epoch) + '.png', normalize=True)
 
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
+    print('====> Epoch: {} Average loss: {:.8f}'.format(
           epoch, train_loss / len(train_loader.dataset)))
 
     torch.save(vae.state_dict(), "./models/"+name+"-"+str(epoch)+".pth")
