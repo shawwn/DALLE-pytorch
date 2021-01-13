@@ -77,6 +77,7 @@ class DiscreteVAE(nn.Module):
         super().__init__()
         assert log2(image_size).is_integer(), 'image size must be a power of 2'
         assert num_layers >= 1, 'number of layers must be greater than or equal to 1'
+        has_resblocks = num_resnet_blocks > 0
 
         self.image_size = image_size
         self.num_tokens = num_tokens
@@ -87,10 +88,12 @@ class DiscreteVAE(nn.Module):
         hdim = hidden_dim
 
         enc_chans = [hidden_dim] * num_layers
-        dec_chans = reversed(enc_chans)
+        dec_chans = list(reversed(enc_chans))
 
         enc_chans = [channels, *enc_chans]
-        dec_chans = [codebook_dim, *dec_chans]
+
+        dec_init_chan = codebook_dim if not has_resblocks else dec_chans[0]
+        dec_chans = [dec_init_chan, *dec_chans]
 
         enc_chans_io, dec_chans_io = map(lambda t: list(zip(t[:-1], t[1:])), (enc_chans, dec_chans))
 
@@ -102,8 +105,11 @@ class DiscreteVAE(nn.Module):
             dec_layers.append(nn.Sequential(nn.ConvTranspose2d(dec_in, dec_out, 4, stride = 2, padding = 1), nn.ReLU()))
 
         for _ in range(num_resnet_blocks):
+            dec_layers.insert(0, ResBlock(dec_chans[1]))
             enc_layers.append(ResBlock(enc_chans[-1]))
-            dec_layers.append(ResBlock(dec_chans[-1]))
+
+        if num_resnet_blocks > 0:
+            dec_layers.insert(0, nn.Conv2d(codebook_dim, dec_chans[1], 1))
 
         enc_layers.append(nn.Conv2d(enc_chans[-1], num_tokens, 1))
         dec_layers.append(nn.Conv2d(dec_chans[-1], channels, 1))
@@ -173,7 +179,7 @@ class CLIP(nn.Module):
         super().__init__()
         self.text_emb = nn.Embedding(num_text_tokens, dim_text)
         self.text_pos_emb = nn.Embedding(text_seq_len, dim_text)
-        self.text_transformer = Transformer(causal = False, dim = dim_text, depth = text_enc_depth, heads = text_heads)
+        self.text_transformer = Transformer(causal = False, seq_len = text_seq_len, dim = dim_text, depth = text_enc_depth, heads = text_heads)
         self.to_text_latent = nn.Linear(dim_text, dim_latent, bias = False)
 
         assert visual_image_size % visual_patch_size == 0, 'Image dimensions must be divisible by the patch size.'
@@ -183,7 +189,7 @@ class CLIP(nn.Module):
         self.visual_patch_size = visual_patch_size
         self.to_visual_embedding = nn.Linear(patch_dim, dim_image)
         self.visual_pos_emb = nn.Embedding(num_patches, dim_image)
-        self.visual_transformer = Transformer(causal = False, dim = dim_image, depth = visual_enc_depth, heads = visual_heads)
+        self.visual_transformer = Transformer(causal = False, seq_len = num_patches, dim = dim_image, depth = visual_enc_depth, heads = visual_heads)
         self.to_visual_latent = nn.Linear(dim_image, dim_latent, bias = False)
 
         self.temperature = nn.Parameter(torch.tensor(1.))
@@ -245,7 +251,8 @@ class DALLE(nn.Module):
         dim_head = 64,
         reversible = False,
         attn_dropout = 0.,
-        ff_dropout = 0
+        ff_dropout = 0,
+        sparse_attn = False
     ):
         super().__init__()
         assert isinstance(vae, DiscreteVAE), 'vae must be an instance of DiscreteVAE'
@@ -278,12 +285,14 @@ class DALLE(nn.Module):
         self.transformer = Transformer(
             dim = dim,
             causal = True,
+            seq_len = seq_len,
             depth = depth,
             heads = heads,
             dim_head = dim_head,
             reversible = reversible,
             attn_dropout = attn_dropout,
-            ff_dropout = ff_dropout
+            ff_dropout = ff_dropout,
+            sparse_attn = sparse_attn
         )
 
         self.to_logits = nn.Sequential(
