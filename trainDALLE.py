@@ -250,7 +250,7 @@ else:
 # load pretrained dalle if continuing training
 if loadfn != "":
     print('Loading DALLE...')
-    dalle_dict = torch.load(loadfn)
+    dalle_dict = torch.load(loadfn, map_location=device if mode == 'cpu' else None)
     dalle.load_state_dict(dalle_dict)
 
 dalle.to(device)
