@@ -253,6 +253,8 @@ if loadfn != "":
     dalle_dict = torch.load(loadfn)
     dalle.load_state_dict(dalle_dict)
 
+dalle.to(device)
+
 
 if opt.generate:
     caption = input('Type a prompt:')
@@ -267,8 +269,6 @@ if opt.generate:
     log('Saving {!r}'.format(fpath))
     save_image(oimgs, fpath, normalize=True)
     sys.exit(0)
-
-dalle.to(device)
 
 optimizer = optim.Adam(dalle.parameters(), lr=lr)
 
