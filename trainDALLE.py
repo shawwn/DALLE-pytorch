@@ -257,7 +257,7 @@ dalle.to(device)
 
 
 if opt.generate:
-    caption = input('Type a prompt:')
+    caption = input('Type a prompt:').rstrip()
     tokens = tokenize(caption)
     while len(tokens) < opt.text_seq_len:
       tokens += [0]
