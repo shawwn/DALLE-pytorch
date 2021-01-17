@@ -7,8 +7,13 @@ import torch.optim as optim
 from torchvision.utils import save_image
 import os
 
+mode = 'cuda' if torch.cuda.is_available() else 'cpu'
+cuda = mode == 'cuda'
+stub = False
+
 parser = argparse.ArgumentParser(description='train VAE for DALLE-pytorch')
-parser.add_argument('--batchSize', type=int, default=24, help='batch size for training (default: 24)')
+parser.add_argument('--batchSize', type=int, default=24 if cuda else 1, help='batch size for training (default: 24)')
+parser.add_argument('--text_seq_len', type=int, default=256 if cuda else 50, help='text sequence length (default: 256)')
 parser.add_argument('--dataPath', type=str, default="./imagedata", help='path to imageFolder (default: ./imagedata')
 parser.add_argument('--imageSize', type=int, default=256, help='image size for training (default: 256)')
 parser.add_argument('--n_epochs', type=int, default=500, help='number of epochs (default: 500)')
@@ -20,7 +25,27 @@ parser.add_argument('--vae_epoch', type=int, default=0, help='start epoch number
 parser.add_argument('--name', type=str, default="test", help='experiment name')
 parser.add_argument('--load_dalle', type=str, default="", help='name for pretrained VAE when continuing training')
 parser.add_argument('--start_epoch', type=int, default=0, help='start epoch numbering for continuing training (default: 0)')
+parser.add_argument('--vocabSize', type=int, default=49408, help='vocab size (default: CLIP)')
 opt = parser.parse_args()
+
+from pprint import pprint as pp
+
+import inspect
+
+def p(x):
+  if inspect.isgenerator(x):
+    x = list(x)
+  pp(x)
+  return x
+
+import time
+
+def now():
+  return time.time()
+
+def log(*args):
+  with tqdm.tqdm.external_write_mode():
+    print(*args)
 
 # vae
 
@@ -51,6 +76,10 @@ for lin in tqdm.tqdm(list(lf)):
     (fn, txt) = lin.split(":", 1) if ':' in lin else (lin, lin)
     txt = txt or fn
     codes = tokenizer.encode(txt + '<|endoftext|>')
+    if len(codes) > opt.text_seq_len + 1:
+      eot = codes.pop() # get endoftext token
+      codes = codes[0:opt.text_seq_len-1] # truncate 
+      codes[-1] = eot # set last token to endoftext
     print(fn, codes)
     data.append((fn, codes))
 
@@ -82,7 +111,7 @@ class ImageCaptions:
         c_data = []
         for i in range(0, self.batchsize):
             i_data.append(self.data[self.index][0])
-            c_tokens = [0]*256  # fill to match text_seq_len
+            c_tokens = [0]*opt.text_seq_len  # fill to match text_seq_len
             c_tokens_ = self.data[self.index][1]
             c_tokens[:len(c_tokens_)] = c_tokens_    
             c_data.append(c_tokens) 
@@ -103,7 +132,6 @@ start_epoch = opt.start_epoch
 name = opt.name #v2vae256
 
 
-mode = 'cuda' if torch.cuda.is_available() else 'cpu'
 device = torch.device(mode)
 
 class CenterCropLongEdge(object):
@@ -183,43 +211,48 @@ vae_dict = torch.load("./models/"+vaename+"-"+str(load_epoch)+".pth", map_locati
 vae.load_state_dict(vae_dict)
 vae.to(device)
 
-if False:
+print('Creating DALLE...')
 
+if cuda:
   dalle = DALLE(
       dim = 256, #512,
       vae = vae,                  # automatically infer (1) image sequence length and (2) number of image tokens
-      num_text_tokens = 10000,    # vocab size for text
-      text_seq_len = 256,         # text sequence length
+      num_text_tokens = opt.vocabSize,    # vocab size for text
+      text_seq_len = opt.text_seq_len,         # text sequence length
       depth = 6,                  # should be 64
       heads = 8,                  # attention heads
       dim_head = 64,              # attention head dimension
       attn_dropout = 0.1,         # attention dropout
       ff_dropout = 0.1            # feedforward dropout
   )
+else:
+  dalle = DALLE(
+      dim = 256, #512,
+      vae = vae,                  # automatically infer (1) image sequence length and (2) number of image tokens
+      num_text_tokens = opt.vocabSize,    # vocab size for text
+      text_seq_len = opt.text_seq_len,          # text sequence length
+      depth = 2,                  # should be 64
+      heads = 2,                  # attention heads
+      dim_head = 2 ,              # attention head dimension
+      attn_dropout = 0.1,         # attention dropout
+      ff_dropout = 0.1            # feedforward dropout
+  )
 
 
-  # load pretrained dalle if continuing training
-  if loadfn != "":
-      dalle_dict = torch.load(loadfn)
-      dalle.load_state_dict(dalle_dict)
+# load pretrained dalle if continuing training
+if loadfn != "":
+    print('Loading DALLE...')
+    dalle_dict = torch.load(loadfn)
+    dalle.load_state_dict(dalle_dict)
 
-  dalle.to(device)
+dalle.to(device)
 
-
-
-  optimizer = optim.Adam(dalle.parameters(), lr=lr)
-
-import time
-def now():
-  return time.time()
-
-def log(*args):
-  with tqdm.tqdm.external_write_mode():
-    print(*args)
+optimizer = optim.Adam(p(dalle.parameters()), lr=lr)
 
 last_print = now()
 
-for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
+ebar = tqdm.trange(start_epoch, start_epoch+n_epochs)
+for epoch in ebar:
   batch_idx = 0    
   train_loss = 0    
   dset = ImageCaptions(data, batchsize=batchSize) # initialize iterator
@@ -228,14 +261,14 @@ for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
     for i,c in dset:  # loop through dataset by minibatch
       pbar.update(dset.batchsize)
       text = torch.LongTensor(c)  # a minibatch of text (numerical tokens)
-      images = torch.zeros(len(i), 3, 256, 256) # placeholder for images
+      images = torch.zeros(len(i), 3, imgSize, imgSize) # placeholder for images
       
       text = text.to(device)
-      log(text)
       
       # fetch images into tensor based on paths given in minibatch
       for ix, imgfn in tqdm.tqdm(enumerate(i)):       # iterate through image paths in minibatch
-          log(ix, imgfn)
+          caption = tokenizer.decode(list(text[ix].numpy()), sep='')
+          log(ix, imgfn, caption)
 
           img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
           img_t = tf(img_t)  # normalize 
@@ -248,7 +281,6 @@ for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
             imgx = vae.decode(codes)
         k = 8
         grid = torch.cat([images[:k], recons[:k], imgx[:k]])
-          
         save_image(grid, 'reals.png')
         last_print = now()
         
@@ -257,7 +289,7 @@ for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
           
       mask = torch.ones_like(text).bool().to(device)
 
-      if False:
+      if not stub:
         # train and optimize a single minibatch
         optimizer.zero_grad()
         loss = dalle(text, images, mask = mask, return_loss = True)
@@ -268,17 +300,22 @@ for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
       else:
         v_loss = float('inf')
       
+      msg = ('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+          epoch, batch_idx * len(i), len(data),
+          100. * batch_idx / int(round(len(data)/batchSize)),
+          v_loss))
+      pbar.set_description(msg)
+      pbar.refresh()
+      ebar.refresh()
+
       if batch_idx % log_interval == 0:
-        log('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-            epoch, batch_idx * len(i), len(data),
-            100. * batch_idx / int(round(len(data)/batchSize)),
-            v_loss))
+        log(msg)
       
       batch_idx += 1
 
   log('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss / len(data)))
 
-  if False:
+  if not stub:
     torch.save(dalle.state_dict(), "./models/"+name+"_dalle_"+str(epoch)+".pth")
     
     # generate a test sample from the captions in the last minibatch
