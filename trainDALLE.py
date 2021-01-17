@@ -268,7 +268,7 @@ dalle.to(device)
 if opt.generate:
   while True:
     print('(Type "quit" to quit, "debug" to enter debugger)')
-    caption = input('Type a prompt:').rstrip()
+    caption = input('Type a prompt: ').rstrip()
     if caption == 'quit':
       posix._exit(0)
       break
@@ -342,7 +342,7 @@ for epoch in ebar:
         train_loss += loss.item()
         loss.backward()
         optimizer.step()
-        v_loss = loss.item() / len(i)
+        v_loss = loss.item()
       else:
         v_loss = float('inf')
       
