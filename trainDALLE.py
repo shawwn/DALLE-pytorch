@@ -247,7 +247,7 @@ if loadfn != "":
 
 dalle.to(device)
 
-optimizer = optim.Adam(p(dalle.parameters()), lr=lr)
+optimizer = optim.Adam(dalle.parameters(), lr=lr)
 
 last_print = now()
 
