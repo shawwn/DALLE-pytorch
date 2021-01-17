@@ -257,10 +257,13 @@ dalle.to(device)
 
 
 if opt.generate:
+  while True:
     caption = input('Type a prompt:').rstrip()
     tokens = tokenize(caption)
     while len(tokens) < opt.text_seq_len:
       tokens += [0]
+    print(tokens)
+    print(repr(tokenizer.decode(tokens, sep='')))
     texts = torch.LongTensor([tokens]).to(device)  # a minibatch of text (numerical tokens)
     mask = torch.ones_like(texts).bool().to(device)
     fpath = 'results/prompt.png'
@@ -268,10 +271,6 @@ if opt.generate:
     oimgs = dalle.generate_images(texts, mask = mask)
     log('Saving {!r}'.format(fpath))
     save_image(oimgs, fpath, normalize=True)
-    import pdb
-    pdb.set_trace()
-    import sys
-    sys.exit(0)
 
 optimizer = optim.Adam(dalle.parameters(), lr=lr)
 
