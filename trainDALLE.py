@@ -14,7 +14,8 @@ stub = False
 parser = argparse.ArgumentParser(description='train VAE for DALLE-pytorch')
 parser.add_argument('--batchSize', type=int, default=24 if cuda else 1, help='batch size for training (default: 24)')
 parser.add_argument('--text_seq_len', type=int, default=256 if cuda else 50, help='text sequence length (default: 256)')
-parser.add_argument('--dataPath', type=str, default="./imagedata", help='path to imageFolder (default: ./imagedata')
+parser.add_argument('--dataPath', type=str, default="./imagedata", help='path to imageFolder (default: ./imagedata)')
+parser.add_argument('--captionPath', type=str, default="captions.txt", help='path to captions file containing lines like "<path to image>:<caption for that image>" (default: captions.txt)')
 parser.add_argument('--imageSize', type=int, default=256, help='image size for training (default: 256)')
 parser.add_argument('--n_epochs', type=int, default=100_000_000, help='number of epochs (default: 100,000,000)')
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')
@@ -67,13 +68,14 @@ lr = opt.lr #1e-4
 import encoder
 tokenizer = encoder.get_encoder()
 
-lf = open("captions.txt", "r") # files contains lines in the format image_path : captions
+with open(opt.captionPath, "r") as f: # files contains lines in the format image_path : captions
+  lf = list(f)
 
 data = []
 
 import tqdm
 
-for lin in tqdm.tqdm(list(lf)):
+for lin in tqdm.tqdm(lf):
     lin = lin.rstrip('\r\n')
     (fn, txt) = lin.split(":", 1) if ':' in lin else (lin, lin)
     txt = txt or fn
