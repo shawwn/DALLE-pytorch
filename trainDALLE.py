@@ -5,6 +5,7 @@ from torchvision.io import read_image
 import torchvision.transforms as transforms
 import torch.optim as optim
 from torchvision.utils import save_image
+import os
 
 parser = argparse.ArgumentParser(description='train VAE for DALLE-pytorch')
 parser.add_argument('--batchSize', type=int, default=24, help='batch size for training (default: 24)')
@@ -34,100 +35,26 @@ n_epochs = opt.n_epochs #500
 log_interval = 10
 lr = opt.lr #1e-4
 
-#dalle
-
-# to continue training from a saved checkpoint, give checkpoint path as loadfn and start_epoch 
-
-#loadfn = "./models/dalle_vae-cdim256-140.pth"   
-#start_epoch = 140
-loadfn = opt.load_dalle
-start_epoch = opt.start_epoch
-name = opt.name #v2vae256
-
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-tf = transforms.Compose([
-  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) 
-  ])
-
-vae = DiscreteVAE(
-    image_size = opt.imageSize,
-    num_layers = 3,
-    channels = 3,
-    num_tokens = 2048,
-    codebook_dim = 256,
-    hidden_dim = 128,
-    temperature = 0.9
-)
-
-# load pretrained vae
-print("loading VAE from ./models/"+vaename+"-"+str(load_epoch)+".pth")
-vae_dict = torch.load("./models/"+vaename+"-"+str(load_epoch)+".pth")
-vae.load_state_dict(vae_dict)
-vae.to(device)
-
-dalle = DALLE(
-    dim = 256, #512,
-    vae = vae,                  # automatically infer (1) image sequence length and (2) number of image tokens
-    num_text_tokens = 10000,    # vocab size for text
-    text_seq_len = 256,         # text sequence length
-    depth = 6,                  # should be 64
-    heads = 8,                  # attention heads
-    dim_head = 64,              # attention head dimension
-    attn_dropout = 0.1,         # attention dropout
-    ff_dropout = 0.1            # feedforward dropout
-)
-
-
-# load pretrained dalle if continuing training
-if loadfn != "":
-    dalle_dict = torch.load(loadfn)
-    dalle.load_state_dict(dalle_dict)
-
-dalle.to(device)
-
 # get image and text data
 
-lf = open("od-captionsonly.txt", "r")   # file contains captions only, one caption per line
+import encoder
+tokenizer = encoder.get_encoder()
 
-# build vocabulary
-
-from Vocabulary import Vocabulary
-
-vocab = Vocabulary("captions")
-
-captions = []
-for lin in lf:
-    captions.append(lin)
-	
-for caption in captions:
-    vocab.add_sentence(caption)    
-    
-def tokenizer(text): # create a tokenizer function
-    return text.split(' ')
-
-
-lf = open("od-captions.txt", "r") # files contains lines in the format image_path : captions
+lf = open("captions.txt", "r") # files contains lines in the format image_path : captions
 
 data = []
 
-for lin in lf:
-    (fn, txt) = lin.split(":")
-    tokens = tokenizer(txt)
-    codes = []
-    for t in tokens:
-        #print(t)
-        if t=="":
-            continue
-        codes.append(vocab.to_index(t))
-    #print(fn, codes)
+import tqdm
+
+for lin in tqdm.tqdm(list(lf)):
+    lin = lin.rstrip('\r\n')
+    (fn, txt) = lin.split(":", 1) if ':' in lin else (lin, lin)
+    txt = txt or fn
+    codes = tokenizer.encode(txt + '<|endoftext|>')
+    print(fn, codes)
     data.append((fn, codes))
 
-
-
-len_data = len(data)
-print(len_data)
+print(len(data))
 #datactr = 0
 
 # an iterator for fetching data during training
@@ -141,6 +68,9 @@ class ImageCaptions:
         self.end = False
         self.batchsize = batchsize
         
+    def __len__(self):
+        return self.len
+
     def __iter__(self):
         return self
         
@@ -162,57 +92,189 @@ class ImageCaptions:
                 break     
         return i_data, c_data
 
+#dalle
 
-optimizer = optim.Adam(dalle.parameters(), lr=lr)
+# to continue training from a saved checkpoint, give checkpoint path as loadfn and start_epoch 
 
-for epoch in range(start_epoch, start_epoch+n_epochs):
+#loadfn = "./models/dalle_vae-cdim256-140.pth"   
+#start_epoch = 140
+loadfn = opt.load_dalle
+start_epoch = opt.start_epoch
+name = opt.name #v2vae256
+
+
+mode = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = torch.device(mode)
+
+class CenterCropLongEdge(object):
+  """Crops the given PIL Image on the long edge.
+  Args:
+      size (sequence or int): Desired output size of the crop. If size is an
+          int instead of sequence like (h, w), a square crop (size, size) is
+          made.
+  """
+  def __call__(self, img):
+    """
+    Args:
+        img (PIL Image): Image to be cropped.
+    Returns:
+        PIL Image: Cropped image.
+    """
+    size = img.size() if callable(img.size) else img.size
+    if len(size) > 2:
+      C, H, W = size
+      assert C in [3, 4]
+      size = (H, W)
+    return transforms.functional.center_crop(img, min(size))
+
+  def __repr__(self):
+    return self.__class__.__name__
+
+
+
+class RandomCropLongEdge(object):
+  """Crops the given PIL Image on the long edge with a random start point.
+  Args:
+      size (sequence or int): Desired output size of the crop. If size is an
+          int instead of sequence like (h, w), a square crop (size, size) is
+          made.
+  """
+  def __call__(self, img):
+    """
+    Args:
+        img (PIL Image): Image to be cropped.
+    Returns:
+        PIL Image: Cropped image.
+    """
+    size = img.size() if callable(img.size) else img.size
+    size = (min(size), min(size))
+    # Only step forward along this edge if it's the long edge
+    i = (0 if size[0] == img.size[0]
+          else np.random.randint(low=0,high=img.size[0] - size[0]))
+    j = (0 if size[1] == img.size[1]
+          else np.random.randint(low=0,high=img.size[1] - size[1]))
+    return transforms.functional.crop(img, i, j, size[0], size[1])
+
+  def __repr__(self):
+    return self.__class__.__name__
+
+
+tf = transforms.Compose([
+  CenterCropLongEdge(),
+  transforms.Resize(imgSize),
+  #transforms.ToTensor(),
+  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) #(0.267, 0.233, 0.234)
+  ])
+
+
+vae = DiscreteVAE(
+    image_size = opt.imageSize,
+    num_layers = 3,
+    channels = 3,
+    num_tokens = 2048,
+    codebook_dim = 256,
+    hidden_dim = 128,
+    temperature = 0.9
+)
+
+# load pretrained vae
+print("loading VAE from ./models/"+vaename+"-"+str(load_epoch)+".pth")
+vae_dict = torch.load("./models/"+vaename+"-"+str(load_epoch)+".pth", map_location=device)
+vae.load_state_dict(vae_dict)
+vae.to(device)
+
+if False:
+
+  dalle = DALLE(
+      dim = 256, #512,
+      vae = vae,                  # automatically infer (1) image sequence length and (2) number of image tokens
+      num_text_tokens = 10000,    # vocab size for text
+      text_seq_len = 256,         # text sequence length
+      depth = 6,                  # should be 64
+      heads = 8,                  # attention heads
+      dim_head = 64,              # attention head dimension
+      attn_dropout = 0.1,         # attention dropout
+      ff_dropout = 0.1            # feedforward dropout
+  )
+
+
+  # load pretrained dalle if continuing training
+  if loadfn != "":
+      dalle_dict = torch.load(loadfn)
+      dalle.load_state_dict(dalle_dict)
+
+  dalle.to(device)
+
+
+
+  optimizer = optim.Adam(dalle.parameters(), lr=lr)
+
+import time
+def now():
+  return time.time()
+
+def log(*args):
+  with tqdm.tqdm.external_write_mode():
+    print(*args)
+
+last_print = now()
+
+for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
   batch_idx = 0    
   train_loss = 0    
   dset = ImageCaptions(data, batchsize=batchSize) # initialize iterator
-  
-  for i,c in dset:  # loop through dataset by minibatch
-    text = torch.LongTensor(c)  # a minibatch of text (numerical tokens)
-    images = torch.zeros(len(i), 3, 256, 256) # placeholder for images
+  with tqdm.tqdm(total=len(dset)) as pbar:
     
-    text = text.to(device)
-    #print(text)
-    
-    # fetch images into tensor based on paths given in minibatch
-    ix = 0
-    for imgfn in i:       # iterate through image paths in minibatch
+    for i,c in dset:  # loop through dataset by minibatch
+      pbar.update(dset.batchsize)
+      text = torch.LongTensor(c)  # a minibatch of text (numerical tokens)
+      images = torch.zeros(len(i), 3, 256, 256) # placeholder for images
+      
+      text = text.to(device)
+      log(text)
+      
+      # fetch images into tensor based on paths given in minibatch
+      for ix, imgfn in tqdm.tqdm(enumerate(i)):       # iterate through image paths in minibatch
+          log(ix, imgfn)
 
-        # note: images are expected to be in ./imagefolder/0/
-        img_t = read_image(opt.dataPath+"/0/"+imgfn).float()/255.   # read image and scale into float 0..1
-        img_t = tf(img_t)  # normalize 
-        images[ix,:,:,:] = img_t 
-        ix += 1
-
-    images = images.to(device)
+          img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
+          img_t = tf(img_t)  # normalize 
+          images[ix,:,:,:] = img_t 
+      
+      if now() - last_print > 1.0:
+        save_image(images, 'reals.png')
+        last_print = now()
         
-    mask = torch.ones_like(text).bool().to(device)
-    
-    # train and optimize a single minibatch
-    optimizer.zero_grad()
-    loss = dalle(text, images, mask = mask, return_loss = True)
-    train_loss += loss.item()
-    loss.backward()
-    optimizer.step()
-    
-    if batch_idx % log_interval == 0:
-        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+
+      images = images.to(device)
+          
+      mask = torch.ones_like(text).bool().to(device)
+
+      if False:
+        # train and optimize a single minibatch
+        optimizer.zero_grad()
+        loss = dalle(text, images, mask = mask, return_loss = True)
+        train_loss += loss.item()
+        loss.backward()
+        optimizer.step()
+        v_loss = loss.item() / len(i)
+      else:
+        v_loss = float('inf')
+      
+      if batch_idx % log_interval == 0:
+        log('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
             epoch, batch_idx * len(i), len(data),
             100. * batch_idx / int(round(len(data)/batchSize)),
-            loss.item() / len(i)))
+            v_loss))
+      
+      batch_idx += 1
+
+  log('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss / len(data)))
+
+  if False:
+    torch.save(dalle.state_dict(), "./models/"+name+"_dalle_"+str(epoch)+".pth")
     
-    batch_idx += 1
-
-  print('====> Epoch: {} Average loss: {:.4f}'.format(
-          epoch, train_loss / len(data)))
-
-  torch.save(dalle.state_dict(), "./models/"+name+"_dalle_"+str(epoch)+".pth")
-  
-  # generate a test sample from the captions in the last minibatch
-  oimgs = dalle.generate_images(text, mask = mask)
-  save_image(oimgs,
-               'results/'+name+'_dalle_epoch_' + str(epoch) + '.png', normalize=True)
+    # generate a test sample from the captions in the last minibatch
+    oimgs = dalle.generate_images(text, mask = mask)
+    save_image(oimgs, 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png', normalize=True)
 
