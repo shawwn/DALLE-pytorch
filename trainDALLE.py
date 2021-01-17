@@ -257,7 +257,9 @@ if loadfn != "":
 if opt.generate:
     caption = input('Type a prompt:')
     tokens = tokenize(caption)
-    texts = torch.LongTensor(tokens).to(device)  # a minibatch of text (numerical tokens)
+    while len(tokens) < opt.text_seq_len:
+      tokens += [0]
+    texts = torch.LongTensor([tokens]).to(device)  # a minibatch of text (numerical tokens)
     mask = torch.ones_like(texts).bool().to(device)
     fpath = 'results/prompt.png'
     log('Generating {!r}...'.format(fpath))
