@@ -268,6 +268,9 @@ if opt.generate:
     oimgs = dalle.generate_images(texts, mask = mask)
     log('Saving {!r}'.format(fpath))
     save_image(oimgs, fpath, normalize=True)
+    import pdb
+    pdb.set_trace()
+    import sys
     sys.exit(0)
 
 optimizer = optim.Adam(dalle.parameters(), lr=lr)
