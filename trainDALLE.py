@@ -6,6 +6,8 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 from torchvision.utils import save_image
 import os
+import sys
+import posix
 
 mode = 'cuda' if torch.cuda.is_available() else 'cpu'
 cuda = mode == 'cuda'
@@ -265,7 +267,15 @@ dalle.to(device)
 
 if opt.generate:
   while True:
+    print('(Type "quit" to quit, "debug" to enter debugger)')
     caption = input('Type a prompt:').rstrip()
+    if caption == 'quit':
+      posix._exit(0)
+      break
+    if caption == 'debug':
+      import pdb;
+      pdb.set_trace()
+      continue
     tokens = tokenize(caption)
     while len(tokens) < opt.text_seq_len:
       tokens += [0]
