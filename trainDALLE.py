@@ -320,9 +320,15 @@ for epoch in ebar:
   log('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss / len(data)))
 
   if not stub:
-    torch.save(dalle.state_dict(), "./models/"+name+"_dalle_"+str(epoch)+".pth")
+    if epoch % opt.save_every_n_epochs == 0:
+      fpath = "./models/"+name+"_dalle_"+str(epoch)+".pth"
+      log('Saving {!r}'.format(fpath))
+      torch.save(dalle.state_dict(), fpath)
     
     # generate a test sample from the captions in the last minibatch
+    fpath = 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png'
+    log('Generating {!r}...'.format(fpath))
     oimgs = dalle.generate_images(texts, mask = mask)
-    save_image(oimgs, 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png', normalize=True)
+    log('Saving {!r}'.format(fpath))
+    save_image(oimgs, fpath, normalize=True)
 
