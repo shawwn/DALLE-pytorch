@@ -376,7 +376,7 @@ for epoch in ebar:
       
       batch_idx += 1
 
-  msg = '====> Epoch: {} Epoch avg loss: {:.4f}'.format(epoch, train_loss / train_loss_n)
+  msg = '====> Epoch: {} Epoch avg loss: {:.4f} lr: {}'.format(epoch, train_loss / train_loss_n, lr)
   log(msg)
   ebar.set_description(msg)
   ebar.refresh()
