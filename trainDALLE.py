@@ -221,7 +221,7 @@ vae.to(device)
 
 print('Creating DALLE...')
 
-if cuda:
+if cuda or opt.generate:
   dalle = DALLE(
       dim = 256, #512,
       vae = vae,                  # automatically infer (1) image sequence length and (2) number of image tokens
