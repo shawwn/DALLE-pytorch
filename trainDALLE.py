@@ -29,6 +29,7 @@ parser.add_argument('--start_epoch', type=int, default=0, help='start epoch numb
 parser.add_argument('--vocabSize', type=int, default=49408, help='vocab size (default: CLIP)')
 parser.add_argument('--save_every_n_epochs', type=int, default=1, help='save model every N epochs (default: 1)')
 parser.add_argument('--gen_every_n_epochs', type=int, default=1, help='generate samples every N epochs (default: 1)')
+parser.add_argument('--generate', action='store_true', help='generate an image interactively')
 opt = parser.parse_args()
 
 from pprint import pprint as pp
@@ -75,11 +76,14 @@ data = []
 
 import tqdm
 
+def tokenize(text):
+  return tokenizer.encode(text + '<|endoftext|>')
+
 for lin in tqdm.tqdm(lf):
     lin = lin.rstrip('\r\n')
     (fn, txt) = lin.split(":", 1) if ':' in lin else (lin, lin)
     txt = txt or fn
-    codes = tokenizer.encode(txt + '<|endoftext|>')
+    codes = tokenize(txt)
     if len(codes) > opt.text_seq_len:
       eot = codes.pop() # get endoftext token
       codes = codes[0:opt.text_seq_len-1] # truncate 
@@ -248,6 +252,19 @@ if loadfn != "":
     print('Loading DALLE...')
     dalle_dict = torch.load(loadfn)
     dalle.load_state_dict(dalle_dict)
+
+
+if opt.generate:
+    caption = input('Type a prompt:')
+    tokens = tokenize(caption)
+    texts = torch.LongTensor(tokens).to(device)  # a minibatch of text (numerical tokens)
+    mask = torch.ones_like(texts).bool().to(device)
+    fpath = 'results/prompt.png'
+    log('Generating {!r}...'.format(fpath))
+    oimgs = dalle.generate_images(texts, mask = mask)
+    log('Saving {!r}'.format(fpath))
+    save_image(oimgs, fpath, normalize=True)
+    sys.exit(0)
 
 dalle.to(device)
 
