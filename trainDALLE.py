@@ -299,6 +299,10 @@ ebar = tqdm.trange(start_epoch, start_epoch+n_epochs, position=0, desc='Epoch')
 for epoch in ebar:
   batch_idx = 0    
   train_loss = 0    
+  train_loss_n = 0    
+  avg_loss_total = 0
+  avg_loss_count = 0
+  avg_loss = float('inf')
   dset = ImageCaptions(data, batchsize=batchSize) # initialize iterator
   with tqdm.tqdm(total=len(dset), position=1, desc='Batch') as pbar:
     
@@ -339,7 +343,15 @@ for epoch in ebar:
         # train and optimize a single minibatch
         optimizer.zero_grad()
         loss = dalle(texts, images, mask = mask, return_loss = True)
-        train_loss += loss.item()
+        cur_loss = loss.item()
+        train_loss += cur_loss
+        train_loss_n += 1
+        avg_loss_total += cur_loss
+        avg_loss_count += 1
+        if avg_loss_count % log_interval == 0:
+          avg_loss = avg_loss_total / avg_loss_count
+          avg_loss_total = 0
+          avg_loss_count = 0
         loss.backward()
         optimizer.step()
         v_loss = loss.item()
@@ -351,7 +363,7 @@ for epoch in ebar:
         msg += ('Train Epoch: {} [{}/{} ({:.0f}%)]\t'.format(
             epoch, batch_idx * len(i), len(data),
             100. * batch_idx / int(round(len(data)/batchSize))))
-      msg += ('Batch loss: {:.6f}'.format(v_loss))
+      msg += ('Batch loss: {:.3f} Avg loss: {:.4f}'.format(avg_loss))
       pbar.set_description(msg)
       pbar.update(dset.batchsize)
       pbar.refresh()
@@ -362,7 +374,7 @@ for epoch in ebar:
       
       batch_idx += 1
 
-  msg = '====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss / len(data))
+  msg = '====> Epoch: {} Epoch avg loss: {:.4f}'.format(epoch, train_loss / train_loss_n)
   log(msg)
   ebar.set_description(msg)
   ebar.refresh()
