@@ -76,7 +76,7 @@ for lin in tqdm.tqdm(list(lf)):
     (fn, txt) = lin.split(":", 1) if ':' in lin else (lin, lin)
     txt = txt or fn
     codes = tokenizer.encode(txt + '<|endoftext|>')
-    if len(codes) > opt.text_seq_len + 1:
+    if len(codes) > opt.text_seq_len:
       eot = codes.pop() # get endoftext token
       codes = codes[0:opt.text_seq_len-1] # truncate 
       codes[-1] = eot # set last token to endoftext
