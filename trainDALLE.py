@@ -251,28 +251,29 @@ optimizer = optim.Adam(p(dalle.parameters()), lr=lr)
 
 last_print = now()
 
-ebar = tqdm.trange(start_epoch, start_epoch+n_epochs)
+v_loss = float('inf')
+
+ebar = tqdm.trange(start_epoch, start_epoch+n_epochs, position=0, desc='Epoch')
 for epoch in ebar:
   batch_idx = 0    
   train_loss = 0    
   dset = ImageCaptions(data, batchsize=batchSize) # initialize iterator
-  with tqdm.tqdm(total=len(dset)) as pbar:
+  with tqdm.tqdm(total=len(dset), position=1, desc='Batch') as pbar:
     
     for i,c in dset:  # loop through dataset by minibatch
-      pbar.update(dset.batchsize)
-      text = torch.LongTensor(c)  # a minibatch of text (numerical tokens)
+      texts = torch.LongTensor(c)  # a minibatch of text (numerical tokens)
       images = torch.zeros(len(i), 3, imgSize, imgSize) # placeholder for images
       
-      text = text.to(device)
+      texts = texts.to(device)
       
       # fetch images into tensor based on paths given in minibatch
-      for ix, imgfn in tqdm.tqdm(enumerate(i)):       # iterate through image paths in minibatch
-          caption = tokenizer.decode(list(text[ix].numpy()), sep='')
-          log(ix, imgfn, caption)
-
-          img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
-          img_t = tf(img_t)  # normalize 
-          images[ix,:,:,:] = img_t 
+      for ix, imgfn in enumerate(i):       # iterate through image paths in minibatch
+        if ix == 0:
+          caption = tokenizer.decode(list(texts[ix].numpy()), sep='')
+          log('loss: {:.6f}'.format(v_loss), ix, imgfn, caption)
+        img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
+        img_t = tf(img_t)  # normalize 
+        images[ix,:,:,:] = img_t 
       
       if now() - last_print > 1.0:
         with torch.no_grad():
@@ -287,12 +288,12 @@ for epoch in ebar:
 
       images = images.to(device)
           
-      mask = torch.ones_like(text).bool().to(device)
+      mask = torch.ones_like(texts).bool().to(device)
 
       if not stub:
         # train and optimize a single minibatch
         optimizer.zero_grad()
-        loss = dalle(text, images, mask = mask, return_loss = True)
+        loss = dalle(texts, images, mask = mask, return_loss = True)
         train_loss += loss.item()
         loss.backward()
         optimizer.step()
@@ -300,11 +301,14 @@ for epoch in ebar:
       else:
         v_loss = float('inf')
       
-      msg = ('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-          epoch, batch_idx * len(i), len(data),
-          100. * batch_idx / int(round(len(data)/batchSize)),
-          v_loss))
+      msg = ''
+      if False:
+        msg += ('Train Epoch: {} [{}/{} ({:.0f}%)]\t'.format(
+            epoch, batch_idx * len(i), len(data),
+            100. * batch_idx / int(round(len(data)/batchSize))))
+      msg += ('Batch loss: {:.6f}'.format(v_loss))
       pbar.set_description(msg)
+      pbar.update(dset.batchsize)
       pbar.refresh()
       ebar.refresh()
 
@@ -319,6 +323,6 @@ for epoch in ebar:
     torch.save(dalle.state_dict(), "./models/"+name+"_dalle_"+str(epoch)+".pth")
     
     # generate a test sample from the captions in the last minibatch
-    oimgs = dalle.generate_images(text, mask = mask)
+    oimgs = dalle.generate_images(texts, mask = mask)
     save_image(oimgs, 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png', normalize=True)
 
