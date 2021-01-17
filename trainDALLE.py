@@ -155,7 +155,7 @@ class CenterCropLongEdge(object):
     size = img.size() if callable(img.size) else img.size
     if len(size) > 2:
       C, H, W = size
-      assert C in [3, 4]
+      assert C in [1, 3, 4]
       size = (H, W)
     return transforms.functional.center_crop(img, min(size))
 
