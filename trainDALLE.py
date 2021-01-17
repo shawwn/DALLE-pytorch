@@ -16,7 +16,7 @@ parser.add_argument('--batchSize', type=int, default=24 if cuda else 1, help='ba
 parser.add_argument('--text_seq_len', type=int, default=256 if cuda else 50, help='text sequence length (default: 256)')
 parser.add_argument('--dataPath', type=str, default="./imagedata", help='path to imageFolder (default: ./imagedata')
 parser.add_argument('--imageSize', type=int, default=256, help='image size for training (default: 256)')
-parser.add_argument('--n_epochs', type=int, default=500, help='number of epochs (default: 500)')
+parser.add_argument('--n_epochs', type=int, default=100_000_000, help='number of epochs (default: 100,000,000)')
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')
 #parser.add_argument('--tempsched', action='store_true', default=False, help='use temperature scheduling')
 #parser.add_argument('--temperature', type=float, default=0.9, help='vae temperature (default: 0.9)')
