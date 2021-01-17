@@ -207,7 +207,7 @@ vae = DiscreteVAE(
 
 # load pretrained vae
 print("loading VAE from ./models/"+vaename+"-"+str(load_epoch)+".pth")
-vae_dict = torch.load("./models/"+vaename+"-"+str(load_epoch)+".pth", map_location=device)
+vae_dict = torch.load("./models/"+vaename+"-"+str(load_epoch)+".pth", map_location=device if mode == 'cpu' else None)
 vae.load_state_dict(vae_dict)
 vae.to(device)
 
