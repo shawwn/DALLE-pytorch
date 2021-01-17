@@ -275,7 +275,7 @@ for epoch in ebar:
         img_t = tf(img_t)  # normalize 
         images[ix,:,:,:] = img_t 
       
-      if now() - last_print > 1.0:
+      if now() - last_print > 1.0 and mode == 'cpu':
         with torch.no_grad():
             recons = vae(images)
             codes = vae.get_codebook_indices(images)
