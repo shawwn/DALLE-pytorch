@@ -32,6 +32,7 @@ parser.add_argument('--vocabSize', type=int, default=49408, help='vocab size (de
 parser.add_argument('--save_every_n_epochs', type=int, default=1, help='save model every N epochs (default: 1)')
 parser.add_argument('--gen_every_n_epochs', type=int, default=1, help='generate samples every N epochs (default: 1)')
 parser.add_argument('--generate', action='store_true', help='generate an image interactively')
+parser.add_argument('--num_accumulations', type=int, default=1, help='accumulate gradients across N batches (default: 1)')
 opt = parser.parse_args()
 
 from pprint import pprint as pp
@@ -290,6 +291,7 @@ if opt.generate:
     save_image(oimgs, fpath, normalize=True)
 
 optimizer = optim.Adam(dalle.parameters(), lr=lr)
+optimizer.zero_grad()
 
 last_print = now()
 
@@ -341,7 +343,6 @@ for epoch in ebar:
 
       if not stub:
         # train and optimize a single minibatch
-        optimizer.zero_grad()
         loss = dalle(texts, images, mask = mask, return_loss = True)
         cur_loss = loss.item()
         train_loss += cur_loss
@@ -353,7 +354,9 @@ for epoch in ebar:
           avg_loss_total = 0
           avg_loss_count = 0
         loss.backward()
-        optimizer.step()
+        if batch_idx % opt.num_accumulations == 0:
+          optimizer.step()
+          optimizer.zero_grad()
       else:
         cur_loss = float('inf')
       
@@ -384,11 +387,11 @@ for epoch in ebar:
       log('Saving {!r}'.format(fpath))
       torch.save(dalle.state_dict(), fpath)
     
-    # generate a test sample from the captions in the last minibatch
+    # generate a test sample from the last caption in the last minibatch
     if epoch % opt.gen_every_n_epochs == 0:
       fpath = 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png'
       log('Generating {!r}...'.format(fpath))
-      oimgs = dalle.generate_images(texts, mask = mask)
+      oimgs = dalle.generate_images(texts[-1:], mask = mask[-1:])
       log('Saving {!r}'.format(fpath))
       save_image(oimgs, fpath, normalize=True)
 
