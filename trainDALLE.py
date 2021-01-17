@@ -393,7 +393,7 @@ for epoch in ebar:
     if epoch % opt.gen_every_n_epochs == 0:
       fpath = 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png'
       log('Generating {!r}...'.format(fpath))
-      oimgs = dalle.generate_images(texts[-1:], mask = mask[-1:])
+      oimgs = dalle.generate_images(texts, mask = mask)
       log('Saving {!r}'.format(fpath))
       save_image(oimgs, fpath, normalize=True)
 
