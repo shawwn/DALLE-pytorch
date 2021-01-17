@@ -270,7 +270,7 @@ for epoch in ebar:
       for ix, imgfn in enumerate(i):       # iterate through image paths in minibatch
         if ix == 0:
           caption = tokenizer.decode(list(texts[ix].numpy()), sep='')
-          log('loss: {:.6f}'.format(v_loss), ix, imgfn, caption)
+          log('loss: {:.6f}'.format(v_loss), imgfn, caption)
         img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
         img_t = tf(img_t)  # normalize 
         images[ix,:,:,:] = img_t 
