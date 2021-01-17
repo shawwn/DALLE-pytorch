@@ -355,7 +355,7 @@ for epoch in ebar:
           avg_loss_count = 0
         loss.backward()
         if batch_idx % opt.num_accumulations == 0:
-          if opt.num_accumulations == 1 or opt.batch_index > 0:
+          if opt.num_accumulations == 1 or batch_idx > 0:
             log('Accumulating at index %d' % batch_idx)
             optimizer.step()
             optimizer.zero_grad()
