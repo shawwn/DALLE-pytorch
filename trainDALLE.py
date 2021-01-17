@@ -35,6 +35,7 @@ opt = parser.parse_args()
 from pprint import pprint as pp
 
 import inspect
+import traceback
 
 def p(x):
   if inspect.isgenerator(x):
@@ -50,6 +51,12 @@ def now():
 def log(*args):
   with tqdm.tqdm.external_write_mode():
     print(*args)
+
+def log_exn(*args):
+  with tqdm.tqdm.external_write_mode():
+    traceback.print_exc()
+    if len(args) > 0:
+      print(*args)
 
 # vae
 
@@ -297,8 +304,11 @@ for epoch in ebar:
           caption = tokenizer.decode(list(texts[ix].cpu().numpy()), sep='')
           log('loss: {:.6f}'.format(v_loss), imgfn, caption)
         img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
-        img_t = tf(img_t)  # normalize 
-        images[ix,:,:,:] = img_t 
+        try:
+          img_t = tf(img_t)  # normalize 
+          images[ix,:,:,:] = img_t 
+        except:
+          log_exn('Image failed: ', imgfn)
       
       if now() - last_print > 1.0 and mode == 'cpu':
         with torch.no_grad():
