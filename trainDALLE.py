@@ -242,7 +242,14 @@ for epoch in tqdm.trange(start_epoch, start_epoch+n_epochs):
           images[ix,:,:,:] = img_t 
       
       if now() - last_print > 1.0:
-        save_image(images, 'reals.png')
+        with torch.no_grad():
+            recons = vae(images)
+            codes = vae.get_codebook_indices(images)
+            imgx = vae.decode(codes)
+        k = 8
+        grid = torch.cat([images[:k], recons[:k], imgx[:k]])
+          
+        save_image(grid, 'reals.png')
         last_print = now()
         
 
