@@ -293,7 +293,7 @@ optimizer = optim.Adam(dalle.parameters(), lr=lr)
 
 last_print = now()
 
-v_loss = float('inf')
+cur_loss = float('inf')
 
 ebar = tqdm.trange(start_epoch, start_epoch+n_epochs, position=0, desc='Epoch')
 for epoch in ebar:
@@ -316,7 +316,7 @@ for epoch in ebar:
       for ix, imgfn in enumerate(i):       # iterate through image paths in minibatch
         if ix == 0:
           caption = tokenizer.decode(list(texts[ix].cpu().numpy()), sep='')
-          log('loss: {:.6f}'.format(v_loss), imgfn, caption)
+          log('loss: {:.6f} avg: {:.4f}'.format(cur_loss, avg_loss), imgfn, caption)
         img_t = read_image(os.path.join(opt.dataPath,imgfn)).float() / 255.0
         try:
           img_t = tf(img_t)  # normalize 
@@ -354,16 +354,15 @@ for epoch in ebar:
           avg_loss_count = 0
         loss.backward()
         optimizer.step()
-        v_loss = loss.item()
       else:
-        v_loss = float('inf')
+        cur_loss = float('inf')
       
       msg = ''
       if False:
         msg += ('Train Epoch: {} [{}/{} ({:.0f}%)]\t'.format(
             epoch, batch_idx * len(i), len(data),
             100. * batch_idx / int(round(len(data)/batchSize))))
-      msg += ('Batch loss: {:.3f} Avg loss: {:.4f}'.format(avg_loss))
+      msg += ('Batch loss: {:.3f} Avg loss: {:.4f}'.format(cur_loss, avg_loss))
       pbar.set_description(msg)
       pbar.update(dset.batchsize)
       pbar.refresh()
