@@ -378,6 +378,9 @@ for epoch in ebar:
       
       batch_idx += 1
 
+  # ignore any partial batch
+  optimizer.zero_grad()
+
   msg = '====> Epoch: {} Epoch avg loss: {:.4f} lr: {}'.format(epoch, train_loss / train_loss_n, lr)
   log(msg)
   ebar.set_description(msg)
