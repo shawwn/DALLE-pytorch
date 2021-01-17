@@ -26,6 +26,7 @@ parser.add_argument('--name', type=str, default="test", help='experiment name')
 parser.add_argument('--load_dalle', type=str, default="", help='name for pretrained VAE when continuing training')
 parser.add_argument('--start_epoch', type=int, default=0, help='start epoch numbering for continuing training (default: 0)')
 parser.add_argument('--vocabSize', type=int, default=49408, help='vocab size (default: CLIP)')
+parser.add_argument('--save_every_n_epochs', type=int, default=1, help='save every N epochs (default: 1)')
 opt = parser.parse_args()
 
 from pprint import pprint as pp
