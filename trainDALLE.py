@@ -70,7 +70,7 @@ import encoder
 tokenizer = encoder.get_encoder()
 
 with open(opt.captionPath, "r") as f: # files contains lines in the format image_path : captions
-  lf = list(f)
+  lf = [line for line in f if not line.startswith('#')]
 
 data = []
 
