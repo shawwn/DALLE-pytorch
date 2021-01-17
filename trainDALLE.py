@@ -26,7 +26,8 @@ parser.add_argument('--name', type=str, default="test", help='experiment name')
 parser.add_argument('--load_dalle', type=str, default="", help='name for pretrained VAE when continuing training')
 parser.add_argument('--start_epoch', type=int, default=0, help='start epoch numbering for continuing training (default: 0)')
 parser.add_argument('--vocabSize', type=int, default=49408, help='vocab size (default: CLIP)')
-parser.add_argument('--save_every_n_epochs', type=int, default=1, help='save every N epochs (default: 1)')
+parser.add_argument('--save_every_n_epochs', type=int, default=1, help='save model every N epochs (default: 1)')
+parser.add_argument('--gen_every_n_epochs', type=int, default=1, help='generate samples every N epochs (default: 1)')
 opt = parser.parse_args()
 
 from pprint import pprint as pp
@@ -327,9 +328,10 @@ for epoch in ebar:
       torch.save(dalle.state_dict(), fpath)
     
     # generate a test sample from the captions in the last minibatch
-    fpath = 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png'
-    log('Generating {!r}...'.format(fpath))
-    oimgs = dalle.generate_images(texts, mask = mask)
-    log('Saving {!r}'.format(fpath))
-    save_image(oimgs, fpath, normalize=True)
+    if epoch % opt.gen_every_n_epochs == 0:
+      fpath = 'results/'+name+'_dalle_epoch_' + str(epoch) + '.png'
+      log('Generating {!r}...'.format(fpath))
+      oimgs = dalle.generate_images(texts, mask = mask)
+      log('Saving {!r}'.format(fpath))
+      save_image(oimgs, fpath, normalize=True)
 
