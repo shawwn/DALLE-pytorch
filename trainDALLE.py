@@ -80,7 +80,7 @@ for lin in tqdm.tqdm(list(lf)):
       eot = codes.pop() # get endoftext token
       codes = codes[0:opt.text_seq_len-1] # truncate 
       codes[-1] = eot # set last token to endoftext
-    print(fn, codes)
+    #print(fn, codes)
     data.append((fn, codes))
 
 print(len(data))
