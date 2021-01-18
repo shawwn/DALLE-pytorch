@@ -267,9 +267,13 @@ dalle.to(device)
 
 
 if opt.generate:
+  caption = ''
+  temp = 0.6
   while True:
     print('(Type "quit" to quit, "debug" to enter debugger)')
-    caption = input('Type a prompt: ').rstrip()
+    caption = input('prompt: ') or caption:
+    if caption == '':
+      continue
     if caption == 'quit':
       posix._exit(0)
       break
@@ -277,6 +281,7 @@ if opt.generate:
       import pdb;
       pdb.set_trace()
       continue
+    temp = float(input('temperature (default %.2f: ' % temp) or str(temp))
     tokens = tokenize(caption)
     while len(tokens) < opt.text_seq_len:
       tokens += [0]
@@ -286,7 +291,7 @@ if opt.generate:
     mask = torch.ones_like(texts).bool().to(device)
     fpath = 'results/prompt.png'
     log('Generating {!r}...'.format(fpath))
-    oimgs = dalle.generate_images(texts, mask = mask)
+    oimgs = dalle.generate_images(texts, mask = mask, temperature = temp)
     log('Saving {!r}'.format(fpath))
     save_image(oimgs, fpath, normalize=True)
 
