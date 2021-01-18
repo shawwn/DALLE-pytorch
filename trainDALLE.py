@@ -231,7 +231,7 @@ vae.to(device)
 
 print('Creating DALLE...')
 
-if cuda or opt.generate:
+if cuda or not stub:
   dalle = DALLE(
       dim = 256, #512,
       vae = vae,                  # automatically infer (1) image sequence length and (2) number of image tokens
@@ -259,7 +259,7 @@ else:
 
 # load pretrained dalle if continuing training
 if loadfn != "":
-    print('Loading DALLE...')
+    print('Loading DALLE from {}'.format(loadfn))
     dalle_dict = torch.load(loadfn, map_location=device if mode == 'cpu' else None)
     dalle.load_state_dict(dalle_dict)
 
