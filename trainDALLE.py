@@ -281,7 +281,7 @@ if opt.generate:
       import pdb;
       pdb.set_trace()
       continue
-    temp = float(input('temperature (default %.2f: ' % temp) or str(temp)
+    temp = float(input('temperature (default %.2f): ' % temp) or str(temp))
     tokens = tokenize(caption)
     while len(tokens) < opt.text_seq_len:
       tokens += [0]
