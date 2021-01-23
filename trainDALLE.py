@@ -267,11 +267,11 @@ dalle.to(device)
 
 
 if opt.generate:
-  caption = ''
+  caption = 'https/cdn.donmai.us/original/00/3b/003b6e06803f2dbfd2981f96faeab1e6.jpg'
   temp = 0.6
   while True:
     print('(Type "quit" to quit, "debug" to enter debugger)')
-    caption = input('prompt: ') or caption
+    caption = input('prompt (default %s): ' % caption) or caption
     if caption == '':
       continue
     if caption == 'quit':
