@@ -306,11 +306,20 @@ class DALLE(nn.Module):
         seq_range = rearrange(seq_range, 'n -> () n ()')
         logits_range = rearrange(logits_range, 'd -> () () d')
 
+        # logits_mask = (
+        #     ((seq_range >= (text_seq_len - 1)) & (logits_range < num_text_tokens)) |
+        #     ((seq_range < (text_seq_len - 1)) & (logits_range >= num_text_tokens)) |
+        #     ((seq_range != (seq_len - 1)) & (logits_range >= (total_tokens - 1)))
+        # )
         logits_mask = (
-            ((seq_range >= (text_seq_len - 1)) & (logits_range < num_text_tokens)) |
-            ((seq_range < (text_seq_len - 1)) & (logits_range >= num_text_tokens)) |
-            ((seq_range != (seq_len - 1)) & (logits_range >= (total_tokens - 1)))
+            ((seq_range >= text_seq_len) & (logits_range <= num_text_tokens)) |
+            ((seq_range < text_seq_len) & (logits_range > num_text_tokens))
         )
+        
+        # logits_mask = (
+        #     ((seq_range >= text_seq_len) & (logits_range < num_text_tokens)) |
+        #     ((seq_range < text_seq_len) & (logits_range >= num_text_tokens))
+        # )
 
         self.register_buffer('logits_mask', logits_mask)
 
@@ -378,7 +387,7 @@ class DALLE(nn.Module):
                 image = self.vae.get_codebook_indices(image)
 
             image_len = image.shape[1]
-            image[image < 0] = 0 # TODO-HACK: for some reason, some image indices are bogus. Sidestep that problem.
+            #image[image < 0] = 0 # TODO-HACK: for some reason, some image indices are bogus. Sidestep that problem.
             image_emb = self.image_emb(image)
             image_emb += self.image_pos_emb(image_emb)
 
