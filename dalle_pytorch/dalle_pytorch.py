@@ -401,7 +401,7 @@ class DALLE(nn.Module):
         logits = self.to_logits(out)
 
         # mask logits to make sure text predicts text (except last token), and image predicts image
-        mask = self.logits_mask[:, :seq_len].copy()
+        mask = self.logits_mask[:, :seq_len]
         max_neg_value = -torch.finfo(logits.dtype).max
         logits.masked_fill_(mask, max_neg_value)
 
