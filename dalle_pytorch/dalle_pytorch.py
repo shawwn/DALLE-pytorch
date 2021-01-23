@@ -378,6 +378,7 @@ class DALLE(nn.Module):
                 image = self.vae.get_codebook_indices(image)
 
             image_len = image.shape[1]
+            image[image < 0] = 0 # TODO-HACK: for some reason, some image indices are bogus. Sidestep that problem.
             image_emb = self.image_emb(image)
             image_emb += self.image_pos_emb(image_emb)
 
