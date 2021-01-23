@@ -311,15 +311,15 @@ class DALLE(nn.Module):
         #     ((seq_range < (text_seq_len - 1)) & (logits_range >= num_text_tokens)) |
         #     ((seq_range != (seq_len - 1)) & (logits_range >= (total_tokens - 1)))
         # )
-        logits_mask = (
-            ((seq_range >= text_seq_len) & (logits_range <= num_text_tokens)) |
-            ((seq_range < text_seq_len) & (logits_range > num_text_tokens))
-        )
-        
         # logits_mask = (
-        #     ((seq_range >= text_seq_len) & (logits_range < num_text_tokens)) |
-        #     ((seq_range < text_seq_len) & (logits_range >= num_text_tokens))
+        #     ((seq_range >= text_seq_len) & (logits_range <= num_text_tokens)) |
+        #     ((seq_range < text_seq_len) & (logits_range > num_text_tokens))
         # )
+        
+        logits_mask = (
+            ((seq_range >= text_seq_len) & (logits_range < num_text_tokens)) |
+            ((seq_range < text_seq_len) & (logits_range >= num_text_tokens))
+        )
 
         self.register_buffer('logits_mask', logits_mask)
 
@@ -401,7 +401,7 @@ class DALLE(nn.Module):
         logits = self.to_logits(out)
 
         # mask logits to make sure text predicts text (except last token), and image predicts image
-        mask = self.logits_mask[:, :seq_len]
+        mask = self.logits_mask[:, :seq_len].copy()
         max_neg_value = -torch.finfo(logits.dtype).max
         logits.masked_fill_(mask, max_neg_value)
 
